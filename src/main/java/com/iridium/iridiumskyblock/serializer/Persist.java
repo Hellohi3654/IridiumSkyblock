@@ -1,10 +1,10 @@
 package com.iridium.iridiumskyblock.serializer;
 
+import com.cryptomorin.xseries.XBiome;
+import com.cryptomorin.xseries.XMaterial;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.iridium.iridiumskyblock.IridiumSkyblock;
-import com.iridium.iridiumskyblock.XBiome;
-import com.iridium.iridiumskyblock.XMaterial;
 import com.iridium.iridiumskyblock.serializer.typeadapter.*;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -98,6 +98,17 @@ public class Persist {
             return gson.fromJson(content, clazz);
         } catch (Exception ex) {
             IridiumSkyblock.getInstance().getLogger().severe("Failed to parse " + file.toString() + ": " + ex.getMessage());
+            Bukkit.getPluginManager().disablePlugin(IridiumSkyblock.getInstance());
+        }
+
+        return null;
+    }
+
+    public <T> T load(Class<T> clazz, String content) {
+        try {
+            return gson.fromJson(content, clazz);
+        } catch (Exception ex) {
+            IridiumSkyblock.getInstance().getLogger().severe("Failed to parse json");
             Bukkit.getPluginManager().disablePlugin(IridiumSkyblock.getInstance());
         }
 

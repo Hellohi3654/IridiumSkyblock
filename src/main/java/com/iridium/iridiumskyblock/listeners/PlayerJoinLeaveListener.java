@@ -7,7 +7,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 
 public class PlayerJoinLeaveListener implements Listener {
 
@@ -28,10 +27,28 @@ public class PlayerJoinLeaveListener implements Listener {
             }
             final Location location = player.getLocation();
             final IslandManager islandManager = IridiumSkyblock.getIslandManager();
-            if (!islandManager.isIslandWorld(location)) return;
-
             final User user = User.getUser(player);
+            if (!user.tookInterestMessage) {
+                Island island = user.getIsland();
+                if (island != null)
+                    player.sendMessage(Utils.color(IridiumSkyblock.getMessages().islandInterest
+                            .replace("%exp%", Utils.NumberFormatter.format(island.interestExp))
+                            .replace("%crystals%", Utils.NumberFormatter.format(island.interestCrystal))
+                            .replace("%money%", Utils.NumberFormatter.format(island.interestMoney))
+                            .replace("%prefix%", IridiumSkyblock.getConfiguration().prefix)));
+                user.tookInterestMessage = true;
+            }
             user.name = player.getName();
+
+            if (user.getIsland() == null && IridiumSkyblock.getConfiguration().createIslandOnJoin) {
+                if (!user.isOnCooldown() || IridiumSkyblock.getConfiguration().ignoreCooldownOnJoinCreation) {
+                    islandManager.createIsland(player);
+                } else {
+                    player.sendMessage(Utils.color(user.getCooldownTimeMessage()));
+                }
+            }
+
+            if (!islandManager.isIslandWorld(location)) return;
 
             if (user.flying && (user.getIsland() == null || user.getIsland().getFlightBooster() == 0)) {
                 player.setAllowFlight(false);

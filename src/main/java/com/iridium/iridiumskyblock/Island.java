@@ -1,5 +1,7 @@
 package com.iridium.iridiumskyblock;
 
+import com.cryptomorin.xseries.XBiome;
+import com.cryptomorin.xseries.XMaterial;
 import com.earth2me.essentials.Essentials;
 import com.earth2me.essentials.spawn.EssentialsSpawn;
 import com.iridium.iridiumskyblock.api.IslandCreateEvent;
@@ -98,6 +100,8 @@ public class Island {
     @Getter
     private transient BiomeGUI biomeGUI;
     @Getter
+    private transient BiomeGUI netherBiomeGUI;
+    @Getter
     private transient VisitorGUI visitorGUI;
 
     @Getter
@@ -139,6 +143,8 @@ public class Island {
     @Getter
     private double value;
 
+    private double lastMissionValue;
+
     @Getter
     private double extravalue;
 
@@ -159,7 +165,6 @@ public class Island {
     private boolean visit;
 
     @Getter
-    @Setter
     private Color borderColor;
 
     private Map<Role, Permissions> permissions;
@@ -188,11 +193,17 @@ public class Island {
     @Getter
     private XBiome biome;
 
+    @Getter
+    private XBiome netherBiome;
+
     public transient Set<Location> failedGenerators;
+    public transient int interestCrystal;
+    public transient int interestExp;
+    public transient double interestMoney;
 
     private Date lastRegen;
 
-    private transient List<Player> playersOnIsland;
+    private transient Set<Player> playersOnIsland;
     private long lastPlayerCaching;
 
     private static final transient boolean ISFLAT = XMaterial.supports(13);
@@ -213,6 +224,7 @@ public class Island {
         User user = User.getUser(owner);
         user.role = Role.Owner;
         this.biome = IridiumSkyblock.getConfiguration().defaultBiome;
+        this.netherBiome = XBiome.NETHER_WASTES;
         valuableBlocks = new ConcurrentHashMap<>();
         spawners = new ConcurrentHashMap<>();
         this.owner = user.player;
@@ -234,6 +246,7 @@ public class Island {
         warpLevel = 1;
         oreLevel = 1;
         value = 0;
+        lastMissionValue = 0;
         warps = new ArrayList<>();
         startvalue = -1;
         borderColor = IridiumSkyblock.border.startingColor;
@@ -345,6 +358,7 @@ public class Island {
         if (missionLevels == null) missionLevels = new HashMap<>();
         missions.clear();
         missionLevels.clear();
+        lastMissionValue = value;
     }
 
     public int getMission(String mission) {
@@ -400,6 +414,11 @@ public class Island {
             permissions.put(role, new Permissions());
         }
         return permissions.get(role);
+    }
+
+    public void setBorderColor(Color color) {
+        borderColor = color;
+        sendBorder();
     }
 
     public void sendBorder() {
@@ -582,7 +601,7 @@ public class Island {
         for (Mission mission : IridiumSkyblock.getMissions().missions) {
             missionLevels.putIfAbsent(mission.name, 1);
             if (mission.levels.get(missionLevels.get(mission.name)).type == MissionType.VALUE_INCREASE) {
-                setMission(mission.name, (int) (value.doubleValue() - startvalue));
+                setMission(mission.name, (int) (value.doubleValue() - startvalue - lastMissionValue));
             }
         }
         this.value += this.extravalue;
@@ -677,7 +696,7 @@ public class Island {
             members = new HashSet<>();
             members.add(owner);
         }
-        this.playersOnIsland = new ArrayList<>();
+        this.playersOnIsland = new HashSet<>();
         this.lastPlayerCaching = 0L;
         upgradeGUI = new UpgradeGUI(this);
         boosterGUI = new BoosterGUI(this);
@@ -691,7 +710,8 @@ public class Island {
         islandAdminGUI = new IslandAdminGUI(this);
         coopGUI = new CoopGUI(this);
         bankGUI = new BankGUI(this);
-        biomeGUI = new BiomeGUI(this);
+        biomeGUI = new BiomeGUI(this, World.Environment.NORMAL);
+        netherBiomeGUI = new BiomeGUI(this, World.Environment.NETHER);
         visitorGUI = new VisitorGUI(this);
 
         failedGenerators = new HashSet<>();
@@ -768,7 +788,7 @@ public class Island {
             Location center = getCenter().clone();
             if (IridiumSkyblock.getConfiguration().netherIslands) {
                 center.setWorld(IridiumSkyblock.getIslandManager().getNetherWorld());
-                IridiumSkyblock.worldEdit.paste(new File(IridiumSkyblock.schematicFolder, netherschematic), center.clone().add(fakeSchematic.xOffset, fakeSchematic.yOffset, fakeSchematic.zOffset), this);
+                IridiumSkyblock.worldEdit.paste(new File(IridiumSkyblock.schematicFolder, netherschematic), center.clone().add(fakeSchematic.xNetherOffset, fakeSchematic.yNetherOffset, fakeSchematic.zNetherOffset), this);
             }
         }
     }
@@ -895,7 +915,6 @@ public class Island {
         Bukkit.getScheduler().cancelTask(getBankGUI().scheduler);
         if (generateID != -1) Bukkit.getScheduler().cancelTask(generateID);
         permissions.clear();
-        clearInventories();
         spawnPlayers();
         for (String player : members) {
             User.getUser(player).islandID = 0;
@@ -1044,7 +1063,7 @@ public class Island {
         }
     }
 
-    public List<Player> getPlayersOnIsland() {
+    public Set<Player> getPlayersOnIsland() {
         if (System.currentTimeMillis() >= lastPlayerCaching + (IridiumSkyblock.getConfiguration().playersOnIslandRefreshTime * 1000L)) {
             reloadPlayersOnIsland();
         }
@@ -1069,29 +1088,51 @@ public class Island {
             player.teleport(essentialsSpawn.getSpawn(essentials.getUser(player).getGroup()));
         } else {
             World world = Bukkit.getWorld(IridiumSkyblock.getConfiguration().worldSpawn);
-            if (world == null) {
-                world = Bukkit.getWorlds().get(0);
-            }
+            if (world == null) world = Bukkit.getWorlds().get(0);
             player.teleport(world.getSpawnLocation());
         }
+        playersOnIsland.remove(player);
     }
 
     public void setBiome(XBiome biome) {
         this.biome = biome;
         final World world = IridiumSkyblock.getIslandManager().getWorld();
-        biome.setBiome(getPos1(), getPos2());
-        for (int X = getPos1().getChunk().getX(); X <= getPos2().getChunk().getX(); X++) {
-            for (int Z = getPos1().getChunk().getZ(); Z <= getPos2().getChunk().getZ(); Z++) {
-                for (Player p : world.getPlayers()) {
-                    if (p.getLocation().getWorld() == world) {
-                        IridiumSkyblock.nms.sendChunk(p, world.getChunkAt(X, Z));
+        biome.setBiome(getPos1(), getPos2()).thenRunAsync(() -> {
+            for (int X = getPos1().getChunk().getX(); X <= getPos2().getChunk().getX(); X++) {
+                for (int Z = getPos1().getChunk().getZ(); Z <= getPos2().getChunk().getZ(); Z++) {
+                    for (Player p : world.getPlayers()) {
+                        if (p.getLocation().getWorld() == world) {
+                            IridiumSkyblock.nms.sendChunk(p, world.getChunkAt(X, Z));
+                        }
                     }
                 }
             }
-        }
+        });
+    }
+
+    public void setNetherBiome(XBiome biome) {
+        if (!IridiumSkyblock.getConfiguration().netherIslands) return;
+        this.netherBiome = biome;
+        final World world = IridiumSkyblock.getIslandManager().getNetherWorld();
+        Location pos1 = getPos1();
+        Location pos2 = getPos2();
+        pos1.setWorld(world);
+        pos2.setWorld(world);
+        biome.setBiome(pos1, pos2).thenRunAsync(() -> {
+            for (int X = getPos1().getChunk().getX(); X <= getPos2().getChunk().getX(); X++) {
+                for (int Z = getPos1().getChunk().getZ(); Z <= getPos2().getChunk().getZ(); Z++) {
+                    for (Player p : world.getPlayers()) {
+                        if (p.getLocation().getWorld() == world) {
+                            IridiumSkyblock.nms.sendChunk(p, world.getChunkAt(X, Z));
+                        }
+                    }
+                }
+            }
+        });
     }
 
     public void deleteBlocks() {
+        clearInventories();
         valuableBlocks.clear();
         calculateIslandValue();
         final World world = IridiumSkyblock.getIslandManager().getWorld();

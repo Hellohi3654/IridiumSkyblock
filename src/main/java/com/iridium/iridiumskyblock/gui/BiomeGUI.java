@@ -1,10 +1,15 @@
 package com.iridium.iridiumskyblock.gui;
 
-import com.iridium.iridiumskyblock.*;
+import com.cryptomorin.xseries.XBiome;
+import com.iridium.iridiumskyblock.IridiumSkyblock;
+import com.iridium.iridiumskyblock.Island;
+import com.iridium.iridiumskyblock.User;
+import com.iridium.iridiumskyblock.Utils;
 import com.iridium.iridiumskyblock.configs.Config;
 import org.apache.commons.lang.WordUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -25,13 +30,16 @@ public class BiomeGUI extends GUI implements Listener {
 
     public int page;
 
+    public World.Environment environment;
+
     public BiomeGUI root;
 
     public Map<Integer, BiomeGUI> pages = new HashMap<>();
 
     public Map<Integer, XBiome> biomes = new HashMap<>();
 
-    public BiomeGUI(Island island) {
+    public BiomeGUI(Island island, World.Environment environment) {
+        this.environment = environment;
         IridiumSkyblock.getInstance().registerListeners(this);
         int size = (int) (Math.floor(Biome.values().length / ((double) IridiumSkyblock.getInventories().biomeGUISize - 9)) + 1);
         for (int i = 1; i <= size; i++) {
@@ -51,8 +59,8 @@ public class BiomeGUI extends GUI implements Listener {
         this.i = 0;
         this.slot = 0;
         super.addContent();
-        IridiumSkyblock.getConfiguration().islandBiomes.keySet().stream().sorted(Comparator.comparing(XBiome::toString)).forEach((biome) -> {
-            if (biome.parseBiome() != null) {
+        IridiumSkyblock.getConfiguration().islandBiomes.keySet().stream().filter(xBiome -> xBiome.getEnvironment().equals(root.environment)).sorted(Comparator.comparing(XBiome::toString)).forEach((biome) -> {
+            if (biome.getBiome() != null) {
                 if (i >= 45 * (page - 1) && slot < 45) {
                     Config.BiomeConfig biomeConfig = IridiumSkyblock.getConfiguration().islandBiomes.get(biome);
                     ItemStack itemStack = Utils.makeItem(IridiumSkyblock.getInventories().biome, Arrays.asList(
@@ -112,8 +120,15 @@ public class BiomeGUI extends GUI implements Listener {
                 }
                 if (biomes.containsKey(e.getSlot())) {
                     Config.BiomeConfig biomeConfig = IridiumSkyblock.getConfiguration().islandBiomes.get(biomes.get(e.getSlot()));
-                    if (Utils.canBuy(p, IridiumSkyblock.getConfiguration().islandBiomes.getOrDefault(biomes.get(e.getSlot()), new Config.BiomeConfig()).price, biomeConfig.crystals)) {
-                        getIsland().setBiome(biomes.get(e.getSlot()));
+                    Utils.BuyResponce responce = Utils.canBuy(p, IridiumSkyblock.getConfiguration().islandBiomes.getOrDefault(biomes.get(e.getSlot()), new Config.BiomeConfig()).price, biomeConfig.crystals);
+                    if (responce == Utils.BuyResponce.SUCCESS) {
+                        switch (root.environment) {
+                            case NORMAL:
+                                getIsland().setBiome(biomes.get(e.getSlot()));
+                                break;
+                            case NETHER:
+                                getIsland().setNetherBiome(biomes.get(e.getSlot()));
+                        }
                         p.sendMessage(Utils.color(IridiumSkyblock.getMessages().biomePurchased
                                 .replace("%prefix%", IridiumSkyblock.getConfiguration().prefix)
                                 .replace("%biome%", WordUtils.capitalize(biomes.get(e.getSlot()).name().toLowerCase().replace("_", " ")))
@@ -121,7 +136,7 @@ public class BiomeGUI extends GUI implements Listener {
                                 .replace("%money", Utils.NumberFormatter.format(biomeConfig.price))));
                         sendBiomeChangeMessage(WordUtils.capitalize(biomes.get(e.getSlot()).name().toLowerCase().replace("_", " ")), p);
                     } else {
-                        p.sendMessage(Utils.color(IridiumSkyblock.getMessages().cantBuy.replace("%prefix%", IridiumSkyblock.getConfiguration().prefix)));
+                        p.sendMessage(Utils.color(responce == Utils.BuyResponce.NOT_ENOUGH_VAULT ? IridiumSkyblock.getMessages().cantBuy : IridiumSkyblock.getMessages().notEnoughCrystals.replace("%prefix%", IridiumSkyblock.getConfiguration().prefix)));
                     }
                 }
             }

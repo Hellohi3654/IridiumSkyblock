@@ -2,7 +2,9 @@ package com.iridium.iridiumskyblock.configs;
 
 import com.iridium.iridiumskyblock.Role;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Messages {
@@ -130,6 +132,17 @@ public class Messages {
     public String expelledVisitor = "%prefix% &7%player% has been expelled from your island.";
     public String cantExpelPlayer = "%prefix% &7%player% cannot be expelled!";
     public String cantExpelMember = "%prefix% &7%player% is in your island team";
+    public String inviteHoverMessage = "Click to join players island!";
+    public String notNumber = "%prefix% &7%error% is not a number!";
+    public String coopHoverMessage = "Click to coop player's island!";
+    public String addedValue = "%prefix% &7%value% will be added to %player%'s island value on the next value update";
+    public String removedValue = "%prefix% &7%value% will be removed from %player%'s island value on the next value update";
+    public String notEnoughValue = "%prefix% &7%player%'s island does not have that much value!";
+    public String purgingIslands = "%prefix% &7purging islands, Estimated time: %minutes% Minutes and %seconds% Seconds";
+    public String purgingFinished = "%prefix% &7Purging islands Finished. Purged %amount% Islands";
+    public String purgingAlreadyInProcess = "%prefix% &7Purging islands already in Process";
+
+    public List<String> stackedBlocksHologram = Arrays.asList("&b&l [{amount}X] &b{block}");
 
     public Map<Role, String> roles = new HashMap<Role, String>() {{
         for (Role role : Role.values()) {

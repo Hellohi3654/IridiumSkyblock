@@ -1,6 +1,10 @@
 package com.iridium.iridiumskyblock.listeners;
 
-import com.iridium.iridiumskyblock.*;
+import com.iridium.iridiumskyblock.IridiumSkyblock;
+import com.iridium.iridiumskyblock.Island;
+import com.iridium.iridiumskyblock.User;
+import com.iridium.iridiumskyblock.Utils;
+import com.iridium.iridiumskyblock.managers.IslandManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -62,6 +66,7 @@ public class PlayerJoinLeaveListener implements Listener {
             if (island == null) return;
 
             Bukkit.getScheduler().runTaskLater(plugin, () -> island.sendBorder(player), 1);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> island.sendHomograms(player), 1);
         } catch (Exception e) {
             IridiumSkyblock.getInstance().sendErrorMessage(e);
         }

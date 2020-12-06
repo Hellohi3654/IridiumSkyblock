@@ -2,8 +2,12 @@ package com.iridium.iridiumskyblock.listeners;
 
 import com.earth2me.essentials.Essentials;
 import com.earth2me.essentials.spawn.EssentialsSpawn;
-import com.iridium.iridiumskyblock.*;
+import com.iridium.iridiumskyblock.IridiumSkyblock;
+import com.iridium.iridiumskyblock.Island;
+import com.iridium.iridiumskyblock.User;
+import com.iridium.iridiumskyblock.Utils;
 import com.iridium.iridiumskyblock.configs.Config;
+import com.iridium.iridiumskyblock.managers.IslandManager;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -31,7 +35,7 @@ public class PlayerMoveListener implements Listener {
             if (event.getFrom().getX() != event.getTo().getX() || event.getFrom().getZ() != event.getTo().getZ() || event.getFrom().getY() != event.getTo().getY() && event.getTo().getY() < 0) {
                 final Island island = islandManager.getIslandViaLocation(location);
 
-                if (island != null && !island.isVisit() && !island.equals(userIsland) && !island.isCoop(userIsland)) {
+                if (island != null && !island.isVisit() && !island.equals(userIsland) && !island.isCoop(userIsland) && !user.bypassing) {
                     island.spawnPlayer(event.getPlayer());
                     return;
                 }

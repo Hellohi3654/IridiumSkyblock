@@ -8,6 +8,7 @@ import com.iridium.iridiumskyblock.commands.CommandManager;
 import com.iridium.iridiumskyblock.configs.*;
 import com.iridium.iridiumskyblock.gui.*;
 import com.iridium.iridiumskyblock.listeners.*;
+import com.iridium.iridiumskyblock.managers.IslandManager;
 import com.iridium.iridiumskyblock.nms.NMS;
 import com.iridium.iridiumskyblock.placeholders.ClipPlaceholderAPIManager;
 import com.iridium.iridiumskyblock.placeholders.MVDWPlaceholderAPIManager;
@@ -18,13 +19,16 @@ import com.iridium.iridiumskyblock.schematics.WorldEdit7;
 import com.iridium.iridiumskyblock.serializer.Persist;
 import com.iridium.iridiumskyblock.support.*;
 import lombok.Getter;
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Listener;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.*;
@@ -57,6 +61,8 @@ public class IridiumSkyblock extends JavaPlugin {
     @Getter
     public static BlockValues blockValues;
     @Getter
+    public static Stackable stackable;
+    @Getter
     public static Shop shop;
     public static TopGUI topGUI;
     @Getter
@@ -72,6 +78,12 @@ public class IridiumSkyblock extends JavaPlugin {
     private static IridiumSkyblock instance;
     @Getter
     private static Persist persist;
+
+    @Getter
+    private SpawnerSupport spawnerSupport;
+
+    @Getter
+    private Economy economy;
 
     @Getter
     public static IslandManager islandManager;
@@ -135,7 +147,7 @@ public class IridiumSkyblock extends JavaPlugin {
 
             persist = new Persist();
 
-            new Metrics(IridiumSkyblock.getInstance());
+            new Metrics(this);
 
             if (!loadConfigs()) return;
             saveConfigs();
@@ -155,7 +167,7 @@ public class IridiumSkyblock extends JavaPlugin {
                 shopGUI = new ShopGUI();
                 visitGUI = new HashMap<>();
 
-                registerListeners(new EntitySpawnListener(), new BlockPistonListener(), new EntityPickupItemListener(), new PlayerTalkListener(), new ItemCraftListener(), new PlayerTeleportListener(), new PlayerPortalListener(), new BlockBreakListener(), new BlockPlaceListener(), new PlayerInteractListener(), new BlockFromToListener(), new SpawnerSpawnListener(), new EntityDeathListener(), new PlayerJoinLeaveListener(), new BlockGrowListener(), new PlayerTalkListener(), new PlayerMoveListener(), new EntityDamageByEntityListener(), new PlayerExpChangeListener(), new PlayerFishListener(), new EntityExplodeListener(), new PlayerBucketEmptyListener(), new EntityTargetLivingEntityListener());
+                registerListeners(new StructureGrowListener(), new EntitySpawnListener(), new BlockPistonListener(), new EntityPickupItemListener(), new PlayerTalkListener(), new ItemCraftListener(), new PlayerTeleportListener(), new PlayerPortalListener(), new BlockBreakListener(), new BlockPlaceListener(), new PlayerInteractListener(), new BlockFromToListener(), new SpawnerSpawnListener(), new EntityDeathListener(), new PlayerJoinLeaveListener(), new BlockGrowListener(), new PlayerTalkListener(), new PlayerMoveListener(), new EntityDamageByEntityListener(), new PlayerExpChangeListener(), new PlayerFishListener(), new EntityExplodeListener(), new PlayerBucketEmptyListener(), new EntityTargetLivingEntityListener());
 
                 Bukkit.getScheduler().scheduleAsyncRepeatingTask(IridiumSkyblock.getInstance(), this::saveIslandManager, 0, 20 * 60);
 
@@ -201,14 +213,22 @@ public class IridiumSkyblock extends JavaPlugin {
                     e.printStackTrace();
                 }
 
-                if (Bukkit.getPluginManager().getPlugin("Vault") != null) new Vault();
-                if (Bukkit.getPluginManager().isPluginEnabled("WildStacker")) new Wildstacker();
-                if (Bukkit.getPluginManager().isPluginEnabled("MergedSpawner")) new MergedSpawners();
-                if (Bukkit.getPluginManager().isPluginEnabled("UltimateStacker")) new UltimateStacker();
-                if (Bukkit.getPluginManager().isPluginEnabled("EpicSpawners")) new EpicSpawners();
-                if (Bukkit.getPluginManager().isPluginEnabled("AdvancedSpawners")) new AdvancedSpawners();
+                if (Bukkit.getPluginManager().isPluginEnabled("WildStacker")) spawnerSupport = new Wildstacker();
+                if (Bukkit.getPluginManager().isPluginEnabled("MergedSpawner")) spawnerSupport = new MergedSpawners();
+                if (Bukkit.getPluginManager().isPluginEnabled("UltimateStacker"))
+                    spawnerSupport = new UltimateStacker();
+                if (Bukkit.getPluginManager().isPluginEnabled("EpicSpawners")) spawnerSupport = new EpicSpawners();
+                if (Bukkit.getPluginManager().isPluginEnabled("AdvancedSpawners"))
+                    spawnerSupport = new AdvancedSpawners();
+                if (Bukkit.getPluginManager().isPluginEnabled("RoseStacker")) spawnerSupport = new RoseStacker();
                 if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null)
                     registerListeners(new ExpansionUnregisterListener());
+
+                //Register Vault
+                RegisteredServiceProvider<Economy> rsp = Bukkit.getServicesManager().getRegistration(Economy.class);
+                if (rsp != null) {
+                    economy = rsp.getProvider();
+                }
 
                 getLogger().info("----------------------------------------");
                 getLogger().info("");
@@ -365,6 +385,10 @@ public class IridiumSkyblock extends JavaPlugin {
 
             for (Player p : Bukkit.getOnlinePlayers()) {
                 p.closeInventory();
+                User user = User.getUser(p);
+                for (Object object : user.getHolograms()) {
+                    IridiumSkyblock.nms.removeHologram(p, object);
+                }
             }
 
             getLogger().info("-------------------------------");
@@ -594,7 +618,7 @@ public class IridiumSkyblock extends JavaPlugin {
                 island.setName(island.getName().substring(0, configuration.maxIslandName));
             }
             if (island.getName().length() < configuration.minIslandName) {
-                Player owner = Bukkit.getPlayer(UUID.fromString(island.getOwner()));
+                OfflinePlayer owner = Bukkit.getOfflinePlayer(UUID.fromString(island.getOwner()));
                 island.setName(owner.getName());
             }
         }
@@ -615,6 +639,10 @@ public class IridiumSkyblock extends JavaPlugin {
         blockValues = persist.getFile(BlockValues.class).exists() ? persist.load(BlockValues.class) : new BlockValues();
         shop = persist.getFile(Shop.class).exists() ? persist.load(Shop.class) : new Shop();
         border = persist.getFile(Border.class).exists() ? persist.load(Border.class) : new Border();
+        stackable = persist.getFile(Stackable.class).exists() ? persist.load(Stackable.class) : new Stackable();
+        if (stackable.blockList.isEmpty()) {
+            stackable.blockList = Arrays.asList(XMaterial.NETHERITE_BLOCK, XMaterial.DIAMOND_BLOCK, XMaterial.EMERALD_BLOCK, XMaterial.GOLD_BLOCK, XMaterial.IRON_BLOCK);
+        }
 
         if (inventories.red.slot == null) inventories.red.slot = 10;
         if (inventories.green.slot == null) inventories.green.slot = 12;
@@ -630,7 +658,7 @@ public class IridiumSkyblock extends JavaPlugin {
         commandManager = new CommandManager("island");
         commandManager.registerCommands();
 
-        if (configuration == null || missions == null || messages == null || upgrades == null || boosters == null || inventories == null || schematics == null || commands == null || blockValues == null || shop == null) {
+        if (configuration == null || missions == null || messages == null || upgrades == null || boosters == null || inventories == null || schematics == null || commands == null || blockValues == null || shop == null || stackable == null) {
             return false;
         }
 
@@ -772,6 +800,7 @@ public class IridiumSkyblock extends JavaPlugin {
             if (blockValues != null) persist.save(blockValues);
             if (shop != null) persist.save(shop);
             if (border != null) persist.save(border);
+            if (stackable != null) persist.save(stackable);
         });
     }
 }
